@@ -1,0 +1,82 @@
+services:
+  spark-master:
+    image: bitnamilegacy/spark:3.3.2
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - '8080:8080'
+      - '7077:7077'
+    volumes:
+      - ./data:/data
+      - ./scripts:/scripts
+      - ./notebooks:/notebooks
+
+  spark-worker:
+    image: bitnamilegacy/spark:3.3.2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    depends_on:
+      - spark-master
+    volumes:
+      - ./data:/data
+      - ./scripts:/scripts
+
+  hadoop-namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: hadoop-namenode
+    ports:
+      - 9870:9870
+      - 9000:9000
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+      - ./scripts:/scripts
+      - ./data:/data
+    environment:
+      - CLUSTER_NAME=hadoop-spark-cluster
+      - CORE_CONF_fs_defaultFS=hdfs://hadoop-namenode:9000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9870"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  hadoop-datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: hadoop-datanode
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+      - ./scripts:/scripts
+      - ./data:/data
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://hadoop-namenode:9000
+    depends_on:
+      - hadoop-namenode
+
+  jupyter:
+    image: jupyter/pyspark-notebook:spark-3.3.2
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/home/jovyan/data
+      - ./scripts:/home/jovyan/scripts
+    environment:
+      - SPARK_OPTS=--master=spark://spark-master:7077
+    depends_on:
+      - spark-master
+      - hadoop-namenode
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode: 
